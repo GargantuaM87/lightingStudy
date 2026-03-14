@@ -32,7 +32,6 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 
 int main(int, char **)
 {
-
      float quadVertices[] = {
           // positions     // texCoords
           -1.0f,  1.0f,  0.0f, 1.0f,
@@ -47,7 +46,7 @@ int main(int, char **)
 
      if (!glfwInit())
      {
-          return -1;
+         throw 1;
      }
      // Create the window that appears on the screen
      window = glfwCreateWindow(width, height, "Window", NULL, NULL);
@@ -81,7 +80,6 @@ int main(int, char **)
      //-----------IMAGE VARIABLES-----------
      //---SHADOW VARIABLES---
      const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
-
      unsigned int depthMapFBO;
      glGenFramebuffers(1, &depthMapFBO);
 
@@ -91,21 +89,21 @@ int main(int, char **)
      glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
      glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
      glDrawBuffer(GL_NONE);
      glReadBuffer(GL_NONE);
-     glBindFramebuffer(GL_FRAMEBUFFER, 0);  
+     glBindFramebuffer(GL_FRAMEBUFFER, 0);
      ///---END OF SHADOW VARIABLES---
      //FBO fbo();
       //-----------END OF IMAGE VARIABLES-----------
 
      glEnable(GL_DEPTH_TEST); // Allows for depth comparison and updates the depth buffer
      //glEnable(GL_CULL_FACE);
-    
+
 
      // -----------RENDER LOOP VARIABLES-----------
      Camera camera(width, height, glm::vec3(0.0f, 2.5f, 2.0f));
@@ -123,7 +121,7 @@ int main(int, char **)
      ImGui::StyleColorsClassic();
      ImGui_ImplGlfw_InitForOpenGL(window, true);
      ImGui_ImplOpenGL3_Init("#version 330");
-     
+
      glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
      shadowShader.Activate();
@@ -145,9 +143,9 @@ int main(int, char **)
 
            if (!io.WantCaptureMouse)
                camera.Inputs(window);
-          
+
           camera.Matrix(45, 0.1, 100);
-         
+
           //--------------SHADERS & MODEL DRAWING--------------
           //---FIRST PASS (SHADOW MAP)---
           glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
@@ -159,7 +157,7 @@ int main(int, char **)
           glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, nearPlane, farPlane);
           glm::mat4 lightView = glm::lookAt(GUI.lightDir, glm::vec3(0.0f), glm::vec3( 0.0f, 1.0f,  0.0f));
           glm::mat4 lightSpaceMatrix = lightProjection * lightView;
-          
+
           depthShader.Activate();
           depthShader.SetToMat4("lightSpaceMatrix", lightSpaceMatrix);
           depthShader.SetToMat4("model", model);
@@ -214,13 +212,13 @@ int main(int, char **)
 
           ImGui::Text("Edit Directional Light");
           ImGui::SliderFloat3("Direction", &GUI.lightDir[0], -20.0, 20.0);
-          
+
           ImGui::Separator();
 
           ImGui::Text("Edit Point Light");
           ImGui::SliderFloat3("Position", &GUI.lightPos[0], -20.0, 20.0);
           ImGui::End();
-          
+
           ImGui::Render();
           ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
           // ---------END OF IMGUI---------

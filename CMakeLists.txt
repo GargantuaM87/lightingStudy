@@ -4,14 +4,14 @@ cmake_policy(SET CMP0072 NEW)
 
 find_package(OpenGL REQUIRED)
 
-add_executable(dubrovnikSponza 
+add_executable(dubrovnikSponza
 src/main.cpp
 src/shaderClass.cpp
 src/FBO.cpp
 src/VAO.cpp
 src/VBO.cpp
 src/EBO.cpp
-src/glad.h 
+src/glad.h
 src/glad.c
 src/stb.cpp
 src/texture.cpp
@@ -27,12 +27,13 @@ src/imgui/imgui_widgets.cpp
 src/imgui/imgui.cpp)
 
 target_include_directories(dubrovnikSponza PRIVATE
-	${CMAKE_CURRENT_SOURCE_DIR}
-	${CMAKE_CURRENT_SOURCE_DIR}/headers
-	${CMAKE_CURRENT_SOURCE_DIR}/imgui
-	${CMAKE_CURRENT_SOURCE_DIR}/include
+ ${CMAKE_CURRENT_SOURCE_DIR}
+ ${CMAKE_CURRENT_SOURCE_DIR}/headers
+ ${CMAKE_CURRENT_SOURCE_DIR}/imgui
+ ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(dubrovnikSponza glfw assimp OpenGL::GL)
 
-
+file(COPY ${CMAKE_SOURCE_DIR}/assets
+     DESTINATION ${CMAKE_BINARY_DIR})
