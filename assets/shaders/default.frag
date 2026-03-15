@@ -29,7 +29,7 @@ struct PointLight {
 
     float constant;
     float linear;
-    float quadratic; 
+    float quadratic;
 };
 uniform DirectionalLight dLight;
 uniform PointLight pLight;
@@ -41,17 +41,17 @@ vec3 color;
 
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 vec3 CalcDirLight(DirectionalLight light, vec3 normal, vec3 viewDir);
-float ShadowCalculation(vec4 fragPosLightSpace);
+float ShadowCalculation(vec4 fragPosLightSpace, float bias);
 
 void main()
 {
-   vec3 normal = normalize(fs_in.Normal);
-   vec3 viewDir = normalize(u_viewPos - fs_in.FragPos);
-   color = texture(u_mat.texture_diffuse1, fs_in.TexCoords).rgb;
+    vec3 normal = normalize(fs_in.Normal);
+    vec3 viewDir = normalize(u_viewPos - fs_in.FragPos);
+    color = texture(u_mat.texture_diffuse1, fs_in.TexCoords).rgb;
 
-   vec3 result = CalcDirLight(dLight, normal, viewDir);
-   //result += CalcPointLight(pLight, normal, fs_in.FragPos, viewDir);
-   FragColor = vec4(result, 1.0);
+    vec3 result = CalcDirLight(dLight, normal, viewDir);
+    //result += CalcPointLight(pLight, normal, fs_in.FragPos, viewDir);
+    FragColor = vec4(result, 1.0);
 }
 
 vec3 CalcDirLight(DirectionalLight light, vec3 normal, vec3 viewDir) {
@@ -67,7 +67,9 @@ vec3 CalcDirLight(DirectionalLight light, vec3 normal, vec3 viewDir) {
     vec3 diffuse = light.diffuse * diff * color;
     vec3 specular = light.specular * spec;
 
-    float shadow = ShadowCalculation(fs_in.FragPosLightSpace);
+    float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
+
+    float shadow = ShadowCalculation(fs_in.FragPosLightSpace, bias);
     vec3 lighting = (ambient + (1.0 - shadow) * (diffuse + specular)) * color;
 
     return lighting;
@@ -97,7 +99,7 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
     return (ambient + diffuse + specular);
 }
 
-float ShadowCalculation(vec4 fragPosLightSpace) {
+float ShadowCalculation(vec4 fragPosLightSpace, float bias) {
     // perform perspective divide
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5; // transform to range [0, 1] to use to sample from depth map
@@ -105,6 +107,6 @@ float ShadowCalculation(vec4 fragPosLightSpace) {
     float closestDepth = texture(depthMap, projCoords.xy).r;
     float currentDepth = projCoords.z; // the depth of the current fragment the fragment shader is running on
     // depth comparison
-    float shadow = currentDepth > closestDepth ? 1.0 : 0.0;
+    float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
     return shadow;
 }

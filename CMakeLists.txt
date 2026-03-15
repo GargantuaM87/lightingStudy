@@ -34,6 +34,3 @@ target_include_directories(dubrovnikSponza PRIVATE
 )
 
 target_link_libraries(dubrovnikSponza glfw assimp OpenGL::GL)
-
-file(COPY ${CMAKE_SOURCE_DIR}/assets
-     DESTINATION ${CMAKE_BINARY_DIR})
