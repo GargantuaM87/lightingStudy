@@ -16,7 +16,7 @@ std::string get_file_contents(const char* filename) {
     throw(errno);
 }
 
-Shader::Shader(const char* vertexFile, const char* fragmentFile) 
+Shader::Shader(const char* vertexFile, const char* fragmentFile)
 {
     std::string vertexCode = get_file_contents(vertexFile);
     std::string fragmentCode = get_file_contents(fragmentFile);
@@ -24,7 +24,7 @@ Shader::Shader(const char* vertexFile, const char* fragmentFile)
     const char* vertexSource = vertexCode.c_str();
     const char* fragmentSource = fragmentCode.c_str();
 
-    // This is an unsigned-int 
+    // This is an unsigned-int
    // glShaderSource replaces the source code of vertexShader with the source code of vertexShaderSource (its memory address)
    // GPU can't understand source code, so we compile the shader as well
    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -44,6 +44,11 @@ Shader::Shader(const char* vertexFile, const char* fragmentFile)
    // Delete the shaders since we now have them in our shader program (memory management!)
    glDeleteShader(vertexShader);
    glDeleteShader(fragmentShader);
+}
+
+Shader::~Shader()
+{
+    this->Delete();
 }
 
 void Shader::LinkGeometry(const char* geometryFile) {
@@ -84,12 +89,12 @@ void Shader::SetToMat4(const char* uniform, glm::mat4 &matrix) {
     glUniformMatrix4fv(glGetUniformLocation(ID, uniform), 1, GL_FALSE, &matrix[0][0]);
 }
 
-void Shader::Activate() 
+void Shader::Activate()
 {
     glUseProgram(ID);
 }
 
-void Shader::Delete() 
+void Shader::Delete()
 {
     glDeleteProgram(ID);
 }

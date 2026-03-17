@@ -12,7 +12,7 @@ class FBO
         GLuint renderbufferID;
 
         FBO();
-        void AttatchTexture(int width, int height);
+        void AttatchTexture(int width, int height, GLenum internalFormat);
         void AttatchRenderBuffer(GLenum internalFormat, GLenum attatchmentType, int width, int height);
         void AttatchTextureMSAA(int samples, int width, int height);
         void AttatchRenderBufferMSAA(int samples, GLenum internalFormat, GLenum attatchmentType, int width, int height);

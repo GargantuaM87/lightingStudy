@@ -15,6 +15,7 @@ class Shader {
     public:
         GLuint ID;
         Shader(const char* vertexFile, const char* fragmentFile);
+        ~Shader();
 
         void LinkGeometry(const char* geometryFile);
 

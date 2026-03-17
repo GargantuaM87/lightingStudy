@@ -22,6 +22,7 @@
 #include "../include/glm/glm.hpp"
 #include "../include/glm/gtc/matrix_transform.hpp"
 #include "../include/glm/gtc/type_ptr.hpp"
+#include "imgui.h"
 
 
 const unsigned int width = 800;
@@ -68,8 +69,9 @@ int main(int, char **)
      Shader depthShader("../assets/shaders/shadows/depth.vert", "../assets/shaders/shadows/depth.frag");
      Shader pointDepthShader("../assets/shaders/shadows/pointShadow.vert", "../assets/shaders/shadows/pointShadow.frag");
      pointDepthShader.LinkGeometry("../assets/shaders/shadows/pointShadow.geom");
-     Shader framebufferShader("../assets/shaders/framebuffer.vert", "../assets/shaders/framebuffer.frag");
+     Shader hdrFrameShader("../assets/shaders/framebuffer.vert", "../assets/shaders/hdr.frag");
      Shader shadowShader("../assets/shaders/shadows/shadow.vert", "../assets/shaders/default.frag");
+     Shader lightCubeShader("../assets/shaders/default.vert", "../assets/shaders/lightCube.frag");
      // Models
      Model cafe("../assets/ModularModel/modular.obj");
      Model cube("../assets/Models/cube.obj");
@@ -82,6 +84,10 @@ int main(int, char **)
      quadVAO.Unbind();
 
      //-----------IMAGE VARIABLES-----------
+     FBO hdrFBO;
+     hdrFBO.AttatchTexture(width, height, GL_RGBA16F);
+     hdrFBO.AttatchRenderBuffer(GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL_ATTACHMENT, width, height);
+     hdrFBO.CheckStatus();
      //---SHADOW VARIABLES---
      const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
      unsigned int depthMapFBO;
@@ -146,8 +152,9 @@ int main(int, char **)
      glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
      shadowShader.Activate();
-     shadowShader.SetToInt("depthMap", 1);
-     shadowShader.SetToInt("depthCubeMap", 2);
+     shadowShader.SetToInt("u_mat.texture_normal1", 1);
+     shadowShader.SetToInt("depthMap", 2);
+     shadowShader.SetToInt("depthCubeMap", 3);
 
      // Main Render Loop
      while (!glfwWindowShouldClose(window))
@@ -215,27 +222,28 @@ int main(int, char **)
               pointDepthShader.SetToMat4(&("shadowMatrices[" + std::to_string(i) + "]")[0], shadowTransforms[i]);
           }
           pointDepthShader.SetToVec3("lightPos", &GUI.lightPos[0]);
-          pointDepthShader.SetToFloat("far_plane", farPlane);
+          pointDepthShader.SetToFloat("far_plane", far);
           cafe.Draw(pointDepthShader);
           glBindFramebuffer(GL_FRAMEBUFFER, 0);
           //---END OF FIRST PASS---
           //---SECOND PASS (SHADOW RENDERING)---
           glViewport(0, 0, width, height);
+          hdrFBO.Bind();
           glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
           glm::mat4 view = camera.GetViewMatrix();
           glm::mat4 projection = camera.GetProjMatrix();
 
           shadowShader.Activate();
-          glActiveTexture(GL_TEXTURE1);
-          glBindTexture(GL_TEXTURE_2D, depthMap);
           glActiveTexture(GL_TEXTURE2);
+          glBindTexture(GL_TEXTURE_2D, depthMap);
+          glActiveTexture(GL_TEXTURE3);
           glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
 
           shadowShader.SetToMat4("view", view);
           shadowShader.SetToMat4("projection", projection);
           shadowShader.SetToMat4("model", model);
-          shadowShader.SetToFloat("far_plane", farPlane);
+          shadowShader.SetToFloat("far_plane", far);
           shadowShader.SetToMat4("lightSpaceMatrix", lightSpaceMatrix);
           shadowShader.SetToVec3("u_viewPos", &camera.Position[0]);
           shadowShader.SetToVec3("dLight.direction", &GUI.lightDir[0]);
@@ -243,7 +251,7 @@ int main(int, char **)
           shadowShader.SetToVec3("dLight.diffuse", &glm::vec3(0.4)[0]);
           shadowShader.SetToVec3("dLight.specular", &glm::vec3(0.2)[0]);
           shadowShader.SetToVec3("pLight.position", &GUI.lightPos[0]);
-          shadowShader.SetToVec3("pLight.color", &glm::vec3(0.8)[0]);
+          shadowShader.SetToVec3("pLight.color", &GUI.lightColor[0]);
           shadowShader.SetToFloat("pLight.constant", 1.0f);
           shadowShader.SetToFloat("pLight.linear", 0.32f);
           shadowShader.SetToFloat("pLight.quadratic", 0.09f);
@@ -251,14 +259,18 @@ int main(int, char **)
 
           model = glm::translate(model, GUI.lightPos);
           model = glm::scale(model, glm::vec3(0.2f));
-          shadowShader.SetToMat4("model", model);
-          cube.Draw(shadowShader);
+          lightCubeShader.Activate();
+          lightCubeShader.SetToMat4("model", model); lightCubeShader.SetToMat4("view", view); lightCubeShader.SetToMat4("proj", projection);
+          lightCubeShader.SetToVec3("lightColor", &GUI.lightColor[0]);
+          cube.Draw(lightCubeShader);
+          glBindFramebuffer(GL_FRAMEBUFFER, 0);
           //--END OF SECOND PASS---
-          /*framebufferShader.Activate();
-          glBindTexture(GL_TEXTURE_2D, depthMap);
+          hdrFrameShader.Activate();
+          hdrFrameShader.SetToFloat("exposure", GUI.exposure);
+          hdrFBO.BindTexture();
           quadVAO.Bind();
           glDrawArrays(GL_TRIANGLES, 0, 6);
-          quadVAO.Unbind();*/
+          quadVAO.Unbind();
           //--------------END OF SHADERS & MODEL DRAWING--------------
           // ---------IMGUI---------
           ImGui::Begin("OpenGL Settings Panel");
@@ -273,6 +285,11 @@ int main(int, char **)
 
           ImGui::Text("Edit Point Light");
           ImGui::SliderFloat3("Position", &GUI.lightPos[0], -20.0, 20.0);
+          ImGui::SliderFloat3("Color", &GUI.lightColor[0], 0.0, 10.0);
+
+          ImGui::Separator();
+
+          ImGui::SliderFloat("Exposure", &GUI.exposure, 0.0, 5.0);
           ImGui::End();
 
           ImGui::Render();
@@ -287,8 +304,6 @@ int main(int, char **)
      ImGui_ImplOpenGL3_Shutdown();
      ImGui_ImplGlfw_Shutdown();
      ImGui::DestroyContext();
-
-     // ------------OBJECT DELETION------------
 
      glfwTerminate();
      return 0;

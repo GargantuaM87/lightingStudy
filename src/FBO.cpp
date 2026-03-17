@@ -6,16 +6,16 @@ FBO::FBO()
     glBindFramebuffer(GL_FRAMEBUFFER, ID);
 }
 
-void FBO::AttatchTexture(int width, int height)
+void FBO::AttatchTexture(int width, int height, GLenum internalFormat)
 {
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureID, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
-}   
+}
 
 void FBO::AttatchRenderBuffer(GLenum internalFormat, GLenum attatchmentType, int width, int height)
 {
@@ -51,7 +51,7 @@ void FBO::Blit(int width, int height)
     glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 }
 
-void FBO::CheckStatus() 
+void FBO::CheckStatus()
 {
     if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;

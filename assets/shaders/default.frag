@@ -3,6 +3,7 @@ out vec4 FragColor;
 
 struct Material {
     sampler2D texture_diffuse1;
+    sampler2D texture_normal1;
 };
 
 in VS_OUT {
@@ -38,6 +39,14 @@ uniform float far_plane;
 
 vec3 color;
 
+vec3 sampleOffsetDirections[20] = vec3[](
+        vec3(1, 1, 1), vec3(1, -1, 1), vec3(-1, -1, 1), vec3(-1, 1, 1),
+        vec3(1, 1, -1), vec3(1, -1, -1), vec3(-1, -1, -1), vec3(-1, 1, -1),
+        vec3(1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0), vec3(-1, 1, 0),
+        vec3(1, 0, 1), vec3(-1, 0, 1), vec3(1, 0, -1), vec3(-1, 0, -1),
+        vec3(0, 1, 1), vec3(0, -1, 1), vec3(0, -1, -1), vec3(0, 1, -1)
+    );
+
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 vec3 CalcDirLight(DirectionalLight light, vec3 normal, vec3 viewDir);
 float ShadowCalculation(vec4 fragPosLightSpace, float bias);
@@ -49,8 +58,8 @@ void main()
     vec3 viewDir = normalize(u_viewPos - fs_in.FragPos);
     color = texture(u_mat.texture_diffuse1, fs_in.TexCoords).rgb;
 
-    //result = CalcDirLight(dLight, normal, viewDir);
-    vec3 result = CalcPointLight(pLight, normal, fs_in.FragPos, viewDir);
+    vec3 result = CalcDirLight(dLight, normal, viewDir);
+    result *= CalcPointLight(pLight, normal, fs_in.FragPos, viewDir);
     FragColor = vec4(result, 1.0);
 }
 
@@ -135,8 +144,19 @@ float PointShadowCalculation(vec3 fragPos) {
     float closestDepth = texture(depthCubeMap, fragToLight).r;
     closestDepth *= far_plane; // transform range from [0,1] to [0, far_plane];
     float currentDepth = length(fragToLight);
-    float bias = 0.05;
-    float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
+    float shadow = 0.0;
+    float bias = 0.15;
+    int samples = 20;
+    float viewDistance = length(u_viewPos - fragPos);
+    float diskRadius = (1.0 + (viewDistance / far_plane)) / 25.0;
+    for (int i = 0; i < samples; ++i)
+    {
+        float closestDepth = texture(depthCubeMap, fragToLight + sampleOffsetDirections[i] * diskRadius).r;
+        closestDepth *= far_plane; // undo mapping [0;1]
+        if (currentDepth - bias > closestDepth)
+            shadow += 1.0;
+    }
+    shadow /= float(samples);
 
     return shadow;
 }
