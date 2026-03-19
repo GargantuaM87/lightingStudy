@@ -66,12 +66,13 @@ int main(int, char **)
      }
      // Parses the fragment and vertex shader files and wraps them into a shader program
      // The files are compiled to an intermediary language then translated into specific instructions for the GPU
-     Shader depthShader("../assets/shaders/shadows/depth.vert", "../assets/shaders/shadows/depth.frag");
-     Shader pointDepthShader("../assets/shaders/shadows/pointShadow.vert", "../assets/shaders/shadows/pointShadow.frag");
+     Shader depthShader("../assets/shaders/shadows/depth.vert", "../assets/shaders/shadows/depth.frag"); // omnidirectional shadowmaps
+     Shader pointDepthShader("../assets/shaders/shadows/pointShadow.vert", "../assets/shaders/shadows/pointShadow.frag"); // point shadowmaps
      pointDepthShader.LinkGeometry("../assets/shaders/shadows/pointShadow.geom");
-     Shader hdrFrameShader("../assets/shaders/framebuffer.vert", "../assets/shaders/hdr.frag");
-     Shader shadowShader("../assets/shaders/shadows/shadow.vert", "../assets/shaders/default.frag");
-     Shader lightCubeShader("../assets/shaders/default.vert", "../assets/shaders/lightCube.frag");
+     Shader bloomShader("../assets/shaders/framebuffer.vert", "../assets/shaders/bloom/bloom.frag"); //  HDR rendering
+     Shader shadowShader("../assets/shaders/shadows/shadow.vert", "../assets/shaders/default.frag"); // calculating omnidirectional and point shadows
+     Shader lightCubeShader("../assets/shaders/default.vert", "../assets/shaders/lightCube.frag"); // simple light colors
+     Shader gBlurShader("../assets/shaders/framebuffer.vert", "../assets/shaders/bloom/gBlur.frag"); // gaussian blur images
      // Models
      Model cafe("../assets/ModularModel/modular.obj");
      Model cube("../assets/Models/cube.obj");
@@ -93,9 +94,11 @@ int main(int, char **)
      hdrFBO.CheckStatus();
 
      FBO pingpongFBO1;
-     FBO pingpongFBO2;
      pingpongFBO1.AttatchTexture(width, height, GL_RGBA16F);
+     FBO pingpongFBO2;
      pingpongFBO2.AttatchTexture(width, height, GL_RGBA16F);
+
+     FBO pingpongBuffers[2] = {pingpongFBO1, pingpongFBO2};
      //---END OF HDR & BLOOM---
      //---SHADOW VARIABLES---
      const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
@@ -159,12 +162,15 @@ int main(int, char **)
      ImGui_ImplOpenGL3_Init("#version 330");
 
      glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-
+     // Preset Shader Uniforms
      shadowShader.Activate();
-     shadowShader.SetToInt("u_mat.texture_normal1", 1);
-     shadowShader.SetToInt("depthMap", 2);
-     shadowShader.SetToInt("depthCubeMap", 3);
-
+     shadowShader.SetToInt("depthMap", 1);
+     shadowShader.SetToInt("depthCubeMap", 2);
+     bloomShader.Activate();
+     bloomShader.SetToInt("scene", 0);
+     bloomShader.SetToInt("sceneBlur", 1);
+     gBlurShader.Activate();
+     gBlurShader.SetToInt("image", 0);
      // Main Render Loop
      while (!glfwWindowShouldClose(window))
      {
@@ -244,9 +250,9 @@ int main(int, char **)
           glm::mat4 projection = camera.GetProjMatrix();
 
           shadowShader.Activate();
-          glActiveTexture(GL_TEXTURE2);
+          glActiveTexture(GL_TEXTURE1);
           glBindTexture(GL_TEXTURE_2D, depthMap);
-          glActiveTexture(GL_TEXTURE3);
+          glActiveTexture(GL_TEXTURE2);
           glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
 
           shadowShader.SetToMat4("view", view);
@@ -273,10 +279,34 @@ int main(int, char **)
           lightCubeShader.SetToVec3("lightColor", &GUI.lightColor[0]);
           cube.Draw(lightCubeShader);
           glBindFramebuffer(GL_FRAMEBUFFER, 0);
+          //---PINGPONG BUFFERS FOR BLOOM---//
+          bool horizontal = true, firstIteration = true;
+          int amount = 10;
+          gBlurShader.Activate();
+          glActiveTexture(GL_TEXTURE0);
+          for(unsigned int i = 0; i < amount; i++) {
+              pingpongBuffers[horizontal].Bind();
+              //glClear(GL_COLOR_BUFFER_BIT);
+              gBlurShader.SetToInt("horizontal", horizontal);
+              // if first iteration then bind the bright color texture, otherwise bind whichever texture from the pingpong buffers
+              glBindTexture(GL_TEXTURE_2D, firstIteration ? hdrFBO.textureIDs[1] : pingpongBuffers[!horizontal].textureID);
+              quadVAO.Bind();
+              glDrawArrays(GL_TRIANGLES, 0, 6);
+              quadVAO.Unbind();
+              horizontal = !horizontal;
+              if(firstIteration)
+                  firstIteration = false;
+          }
+          glBindFramebuffer(GL_FRAMEBUFFER, 0);
+          //---END---
           //--END OF SECOND PASS---
-          hdrFrameShader.Activate();
-          hdrFrameShader.SetToFloat("exposure", GUI.exposure);
+          glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+          bloomShader.Activate();
+          bloomShader.SetToFloat("exposure", GUI.exposure);
+          glActiveTexture(GL_TEXTURE0);
           hdrFBO.BindTexture(1);
+          glActiveTexture(GL_TEXTURE1);
+          pingpongBuffers[!horizontal].BindTexture();
           quadVAO.Bind();
           glDrawArrays(GL_TRIANGLES, 0, 6);
           quadVAO.Unbind();
