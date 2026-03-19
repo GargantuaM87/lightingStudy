@@ -1,4 +1,6 @@
 #include "../headers/FBO.h"
+#include "camera.h"
+#include <cstddef>
 
 FBO::FBO()
 {
@@ -13,8 +15,27 @@ void FBO::AttatchTexture(int width, int height, GLenum internalFormat)
     glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureID, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void FBO::AttatchTextures(int width, int height, int amount, GLenum internalFormat)
+{
+    for(int i = 0; i < amount; i++) {
+        unsigned int colorBuffer;
+        glGenTextures(1, &colorBuffer);
+
+        glBindTexture(GL_TEXTURE_2D, colorBuffer);
+        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffer, 0);
+        textureIDs.push_back(colorBuffer);
+    }
 }
 
 void FBO::AttatchRenderBuffer(GLenum internalFormat, GLenum attatchmentType, int width, int height)
@@ -57,9 +78,12 @@ void FBO::CheckStatus()
         std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
 }
 
-void FBO::BindTexture()
+void FBO::BindTexture(int index)
 {
-    glBindTexture(GL_TEXTURE_2D, textureID);
+    if(index == 0)
+        glBindTexture(GL_TEXTURE_2D, textureID);
+    else
+        glBindTexture(GL_TEXTURE_2D, textureIDs[index - 1]);
 }
 
 void FBO::BindTextureMSAA()

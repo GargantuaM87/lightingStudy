@@ -84,10 +84,19 @@ int main(int, char **)
      quadVAO.Unbind();
 
      //-----------IMAGE VARIABLES-----------
+     //---HDR & BLOOM---
      FBO hdrFBO;
-     hdrFBO.AttatchTexture(width, height, GL_RGBA16F);
-     hdrFBO.AttatchRenderBuffer(GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL_ATTACHMENT, width, height);
+     hdrFBO.AttatchTextures(width, height, 2, GL_RGBA16F);
+     hdrFBO.AttatchRenderBuffer(GL_DEPTH_COMPONENT, GL_DEPTH_ATTACHMENT, width, height);
+     unsigned int attatchments[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+     glDrawBuffers(2, attatchments);
      hdrFBO.CheckStatus();
+
+     FBO pingpongFBO1;
+     FBO pingpongFBO2;
+     pingpongFBO1.AttatchTexture(width, height, GL_RGBA16F);
+     pingpongFBO2.AttatchTexture(width, height, GL_RGBA16F);
+     //---END OF HDR & BLOOM---
      //---SHADOW VARIABLES---
      const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
      unsigned int depthMapFBO;
@@ -267,7 +276,7 @@ int main(int, char **)
           //--END OF SECOND PASS---
           hdrFrameShader.Activate();
           hdrFrameShader.SetToFloat("exposure", GUI.exposure);
-          hdrFBO.BindTexture();
+          hdrFBO.BindTexture(1);
           quadVAO.Bind();
           glDrawArrays(GL_TRIANGLES, 0, 6);
           quadVAO.Unbind();
