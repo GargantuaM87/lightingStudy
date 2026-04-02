@@ -1,4 +1,5 @@
 #include "../headers/shaderClass.h"
+#include <iostream>
 
 // char* filename represents a character array
 // In C, there is no built-in string class, so this is used to represent strings as well
@@ -13,6 +14,7 @@ std::string get_file_contents(const char* filename) {
         in.close();
         return(contents);
     }
+    std::cerr << "Shader contents are invalid!" << std::endl;
     throw(errno);
 }
 

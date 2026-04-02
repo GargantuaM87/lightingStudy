@@ -6,13 +6,15 @@ in vec2 TexCoords;
 uniform sampler2D scene;
 uniform sampler2D sceneBlur;
 uniform float exposure;
+uniform bool bloom;
 
 void main()
 {
     const float gamma = 2.2;
     vec3 hdrColor = texture(scene, TexCoords).rgb;
     vec3 blurColor = texture(sceneBlur, TexCoords).rgb;
-    hdrColor += blurColor; // additive blending
+    if (bloom)
+        hdrColor += blurColor; // additive blending
     // reinhard tone mapping
     vec3 mapped = vec3(1.0) - exp(-hdrColor * exposure);
     // gamma correction

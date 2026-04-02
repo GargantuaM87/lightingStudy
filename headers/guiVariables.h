@@ -12,6 +12,7 @@ class GUIVariables {
         glm::vec3 lightColor = glm::vec3(1.0f); // point light color
         glm::vec3 lightDir = glm::vec3(-2.0f, 4.0f, 2.0f); // directional light direction
         float exposure = 1.0f;
+        bool bloom = true;
 };
 
 #endif

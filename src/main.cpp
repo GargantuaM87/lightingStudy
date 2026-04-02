@@ -33,6 +33,37 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
      glViewport(0, 0, width, height);
 }
 
+unsigned int LoadCubeMap(std::vector<std::string> faces)
+{
+     unsigned int textureID;
+     glGenTextures(1, &textureID);
+     glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+     int width, height, nrChannels;
+     for(unsigned int i = 0; i < faces.size(); i++)
+     {
+          unsigned char *data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
+          if(data)
+          {
+               glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+               stbi_image_free(data);
+          }
+          else
+          {
+               std::cout << "Cubemap texture failed to load at path: " << faces[i] << std::endl;
+               stbi_image_free(data);
+          }
+     }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return textureID;
+}
+
 int main(int, char **)
 {
      float quadVertices[] = {
@@ -44,6 +75,51 @@ int main(int, char **)
           -1.0f,  1.0f,  0.0f, 1.0f,
           1.0f, -1.0f,  1.0f, 0.0f,
           1.0f,  1.0f,  1.0f, 1.0f
+     };
+
+     float skyboxVertices[] = {
+          // positions
+              -1.0f,  1.0f, -1.0f,
+              -1.0f, -1.0f, -1.0f,
+               1.0f, -1.0f, -1.0f,
+               1.0f, -1.0f, -1.0f,
+               1.0f,  1.0f, -1.0f,
+              -1.0f,  1.0f, -1.0f,
+
+              -1.0f, -1.0f,  1.0f,
+              -1.0f, -1.0f, -1.0f,
+              -1.0f,  1.0f, -1.0f,
+              -1.0f,  1.0f, -1.0f,
+              -1.0f,  1.0f,  1.0f,
+              -1.0f, -1.0f,  1.0f,
+
+               1.0f, -1.0f, -1.0f,
+               1.0f, -1.0f,  1.0f,
+               1.0f,  1.0f,  1.0f,
+               1.0f,  1.0f,  1.0f,
+               1.0f,  1.0f, -1.0f,
+               1.0f, -1.0f, -1.0f,
+
+              -1.0f, -1.0f,  1.0f,
+              -1.0f,  1.0f,  1.0f,
+               1.0f,  1.0f,  1.0f,
+               1.0f,  1.0f,  1.0f,
+               1.0f, -1.0f,  1.0f,
+              -1.0f, -1.0f,  1.0f,
+
+              -1.0f,  1.0f, -1.0f,
+               1.0f,  1.0f, -1.0f,
+               1.0f,  1.0f,  1.0f,
+               1.0f,  1.0f,  1.0f,
+              -1.0f,  1.0f,  1.0f,
+              -1.0f,  1.0f, -1.0f,
+
+             -1.0f, -1.0f, -1.0f,
+             -1.0f, -1.0f,  1.0f,
+              1.0f, -1.0f, -1.0f,
+              1.0f, -1.0f, -1.0f,
+             -1.0f, -1.0f,  1.0f,
+              1.0f, -1.0f,  1.0f
      };
      GLFWwindow *window;
 
@@ -73,6 +149,7 @@ int main(int, char **)
      Shader shadowShader("../assets/shaders/shadows/shadow.vert", "../assets/shaders/default.frag"); // calculating omnidirectional and point shadows
      Shader lightCubeShader("../assets/shaders/default.vert", "../assets/shaders/lightCube.frag"); // simple light colors
      Shader gBlurShader("../assets/shaders/framebuffer.vert", "../assets/shaders/bloom/gBlur.frag"); // gaussian blur images
+     Shader skyboxShader("../assets/shaders/skybox.vert", "../assets/shaders/skybox.frag");
      // Models
      Model cafe("../assets/ModularModel/modular.obj");
      Model cube("../assets/Models/cube.obj");
@@ -83,8 +160,53 @@ int main(int, char **)
      quadVAO.LinkAttrib(quadVBO, 0, 2, GL_FLOAT, 4 * sizeof(float), (void*)0);
      quadVAO.LinkAttrib(quadVBO, 1, 2, GL_FLOAT, 4 * sizeof(float), (void*)(2 * sizeof(float)));
      quadVAO.Unbind();
+     // sky box geometry
+     VAO skyboxVAO;
+     VBO skyboxVBO(skyboxVertices, sizeof(skyboxVertices));
+     skyboxVAO.Bind();
+     skyboxVAO.LinkAttrib(skyboxVBO, 0, 3, GL_FLOAT, 3 * sizeof(float), (void*)0);
+     skyboxVAO.Unbind();
 
      //-----------IMAGE VARIABLES-----------
+     //---G-BUFFER---
+     unsigned int gBuffer;
+     glGenFramebuffers(1, &gBuffer);
+     glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+     unsigned int gPosition, gNormal, gColorSpec;
+     // - gPosition
+     glGenTextures(1, &gPosition);
+     glBindTexture(GL_TEXTURE_2D, gPosition);
+     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
+     // - gNormal
+     glGenTextures(1, &gNormal);
+     glBindTexture(GL_TEXTURE_2D, gNormal);
+     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
+     // - gColorSpec
+     glGenTextures(1, &gColorSpec);
+     glBindTexture(GL_TEXTURE_2D, gColorSpec);
+     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gColorSpec, 0);
+
+     unsigned int gAttatchments[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
+     glDrawBuffers(3, gAttatchments);
+
+     unsigned int gRenderbuffer;
+     glGenRenderbuffers(1, &gRenderbuffer);
+     glBindRenderbuffer(GL_RENDERBUFFER, gRenderbuffer);
+     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gRenderbuffer);
+     if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+         std::cout << "gFramebuffer is not complete!" << std::endl;
+     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+     //---END OF G-BUFFER---
      //---HDR & BLOOM---
      FBO hdrFBO;
      hdrFBO.AttatchTextures(width, height, 2, GL_RGBA16F);
@@ -138,11 +260,25 @@ int main(int, char **)
      glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthCubemap, 0);
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
      ///---END OF SHADOW VARIABLES---
+     // SKYBOX CUBEMAP
+     unsigned int skyboxMap = 0;
+     glGenTextures(1, &skyboxMap);
+     glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxMap);
       //-----------END OF IMAGE VARIABLES-----------
 
      glEnable(GL_DEPTH_TEST); // Allows for depth comparison and updates the depth buffer
      //glEnable(GL_CULL_FACE);
 
+     // cube map texture
+    std::vector<std::string> textureMaps = {
+        "../assets/textures/Yokohama3/negx.jpg",
+        "../assets/textures/Yokohama3/posx.jpg",
+        "../assets/textures/Yokohama3/posy.jpg",
+        "../assets/textures/Yokohama3/negy.jpg",
+        "../assets/textures/Yokohama3/negz.jpg",
+        "../assets/textures/Yokohama3/posz.jpg",
+    };
+    unsigned int cubemapTexture = LoadCubeMap(textureMaps);
 
      // -----------RENDER LOOP VARIABLES-----------
      Camera camera(width, height, glm::vec3(0.0f, 2.5f, 2.0f));
@@ -241,13 +377,15 @@ int main(int, char **)
           cafe.Draw(pointDepthShader);
           glBindFramebuffer(GL_FRAMEBUFFER, 0);
           //---END OF FIRST PASS---
-          //---SECOND PASS (SHADOW RENDERING)---
-          glViewport(0, 0, width, height);
-          hdrFBO.Bind();
-          glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+          //---SECOND PASS (DEFERRED RENDERING)
           glm::mat4 view = camera.GetViewMatrix();
           glm::mat4 projection = camera.GetProjMatrix();
+          //---END OF SECOND PASS---
+          //---THIRD PASS (SHADOW RENDERING)---
+          glViewport(0, 0, width, height);
+          hdrFBO.Bind();
+          //glDrawBuffers(2, attatchments);
+          glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
           shadowShader.Activate();
           glActiveTexture(GL_TEXTURE1);
@@ -298,11 +436,26 @@ int main(int, char **)
                   firstIteration = false;
           }
           glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+          // Sky Box
+          glDepthFunc(GL_LEQUAL);
+          skyboxShader.Activate();
+          glm::mat4 skyboxView = glm::mat4(glm::mat3(camera.GetViewMatrix()));
+          glm::mat4 skyboxProj = camera.GetProjMatrix();
+          skyboxShader.SetToMat4("projection", skyboxProj);
+          skyboxShader.SetToMat4("view", skyboxView);
+          skyboxVAO.Bind();
+          glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+          glDrawArrays(GL_TRIANGLES, 0, 36);
+          glDepthFunc(GL_LESS);
+          skyboxVAO.Unbind();
+
           //---END---
-          //--END OF SECOND PASS---
+          //--END OF THIRD PASS---
           glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
           bloomShader.Activate();
           bloomShader.SetToFloat("exposure", GUI.exposure);
+          bloomShader.SetToInt("bloom", GUI.bloom);
           glActiveTexture(GL_TEXTURE0);
           hdrFBO.BindTexture(1);
           glActiveTexture(GL_TEXTURE1);
@@ -314,6 +467,7 @@ int main(int, char **)
           // ---------IMGUI---------
           ImGui::Begin("OpenGL Settings Panel");
           ImGui::Text("Tweaks");
+          ImGui::Checkbox("Bloom", &GUI.bloom);
 
           ImGui::Separator();
 

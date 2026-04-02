@@ -3,7 +3,7 @@ layout(location = 0) out vec4 FragColor;
 layout(location = 1) out vec4 BrightColor;
 
 struct Material {
-    sampler2D texture_diffuse1;
+    sampler2D texture_diffuse1; //0
 };
 
 in VS_OUT {
@@ -33,9 +33,13 @@ uniform DirectionalLight dLight;
 uniform PointLight pLight;
 uniform Material u_mat;
 uniform vec3 u_viewPos;
-uniform sampler2D depthMap;
-uniform samplerCube depthCubeMap;
+uniform sampler2D depthMap; //1
+uniform samplerCube depthCubeMap; //2
 uniform float far_plane;
+
+uniform sampler2D gPosition; //3
+uniform sampler2D gNormal; //4
+uniform sampler2D gAlbedoSpec; //5
 
 vec3 color;
 
@@ -54,12 +58,14 @@ float PointShadowCalculation(vec3 fragPos);
 
 void main()
 {
-    vec3 normal = normalize(fs_in.Normal);
-    vec3 viewDir = normalize(u_viewPos - fs_in.FragPos);
+    vec3 normal = fs_in.Normal;
+    vec3 fragPos = fs_in.FragPos;
     color = texture(u_mat.texture_diffuse1, fs_in.TexCoords).rgb;
 
+    vec3 viewDir = normalize(u_viewPos - fragPos);
+
     vec3 result = CalcDirLight(dLight, normal, viewDir);
-    result *= CalcPointLight(pLight, normal, fs_in.FragPos, viewDir);
+    result *= CalcPointLight(pLight, normal, fragPos, viewDir);
     FragColor = vec4(result, 1.0);
 
     float brightness = dot(FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
