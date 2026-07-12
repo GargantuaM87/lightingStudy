@@ -41,6 +41,8 @@ uniform sampler2D gPosition; //3
 uniform sampler2D gNormal; //4
 uniform sampler2D gAlbedoSpec; //5
 
+uniform bool colorOrTex = false;
+
 vec3 color;
 
 vec3 sampleOffsetDirections[20] = vec3[](
@@ -60,7 +62,7 @@ void main()
 {
     vec3 normal = fs_in.Normal;
     vec3 fragPos = fs_in.FragPos;
-    color = texture(u_mat.texture_diffuse1, fs_in.TexCoords).rgb;
+    color = (colorOrTex == true) ? vec3(0.4, 0.0, 0.4) : texture(u_mat.texture_diffuse1, fs_in.TexCoords).rgb;
 
     vec3 viewDir = normalize(u_viewPos - fragPos);
 

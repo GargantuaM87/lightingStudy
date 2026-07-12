@@ -22,11 +22,96 @@
 #include "../include/glm/glm.hpp"
 #include "../include/glm/gtc/matrix_transform.hpp"
 #include "../include/glm/gtc/type_ptr.hpp"
+#include "glm/ext/matrix_transform.hpp"
 #include "imgui.h"
 
 
 const unsigned int width = 800;
 const unsigned int height = 800;
+
+bool setShadows = true;
+bool shadowsKeyPressed = false;
+
+void processInput(GLFWwindow* window) {
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS && !shadowsKeyPressed)
+        {
+            setShadows = !setShadows;
+            shadowsKeyPressed = true;
+        }
+        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_RELEASE)
+        {
+            shadowsKeyPressed = false;
+        }
+}
+
+GLenum glCheckError_(const char *file, int line)
+{
+    GLenum errorCode;
+    while ((errorCode = glGetError()) != GL_NO_ERROR)
+    {
+        std::string error;
+        switch (errorCode)
+        {
+            case GL_INVALID_ENUM:                  error = "INVALID_ENUM"; break;
+            case GL_INVALID_VALUE:                 error = "INVALID_VALUE"; break;
+            case GL_INVALID_OPERATION:             error = "INVALID_OPERATION"; break;
+            case GL_STACK_OVERFLOW:                error = "STACK_OVERFLOW"; break;
+            case GL_STACK_UNDERFLOW:               error = "STACK_UNDERFLOW"; break;
+            case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
+            case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
+        }
+        std::cout << error << " | " << file << " (" << line << ")" << std::endl;
+    }
+    return errorCode;
+}
+#define glCheckError() glCheckError_(__FILE__, __LINE__)
+
+void APIENTRY glDebugOutput(GLenum source,
+                            GLenum type,
+                            unsigned int id,
+                            GLenum severity,
+                            GLsizei length,
+                            const char *message,
+                            const void *userParam)
+{
+    // ignore non-significant error/warning codes
+    if(id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
+
+    std::cout << "---------------" << std::endl;
+    std::cout << "Debug message (" << id << "): " <<  message << std::endl;
+
+    switch (source)
+    {
+        case GL_DEBUG_SOURCE_API:             std::cout << "Source: API"; break;
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   std::cout << "Source: Window System"; break;
+        case GL_DEBUG_SOURCE_SHADER_COMPILER: std::cout << "Source: Shader Compiler"; break;
+        case GL_DEBUG_SOURCE_THIRD_PARTY:     std::cout << "Source: Third Party"; break;
+        case GL_DEBUG_SOURCE_APPLICATION:     std::cout << "Source: Application"; break;
+        case GL_DEBUG_SOURCE_OTHER:           std::cout << "Source: Other"; break;
+    } std::cout << std::endl;
+
+    switch (type)
+    {
+        case GL_DEBUG_TYPE_ERROR:               std::cout << "Type: Error"; break;
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: std::cout << "Type: Deprecated Behaviour"; break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  std::cout << "Type: Undefined Behaviour"; break;
+        case GL_DEBUG_TYPE_PORTABILITY:         std::cout << "Type: Portability"; break;
+        case GL_DEBUG_TYPE_PERFORMANCE:         std::cout << "Type: Performance"; break;
+        case GL_DEBUG_TYPE_MARKER:              std::cout << "Type: Marker"; break;
+        case GL_DEBUG_TYPE_PUSH_GROUP:          std::cout << "Type: Push Group"; break;
+        case GL_DEBUG_TYPE_POP_GROUP:           std::cout << "Type: Pop Group"; break;
+        case GL_DEBUG_TYPE_OTHER:               std::cout << "Type: Other"; break;
+    } std::cout << std::endl;
+
+    switch (severity)
+    {
+        case GL_DEBUG_SEVERITY_HIGH:         std::cout << "Severity: high"; break;
+        case GL_DEBUG_SEVERITY_MEDIUM:       std::cout << "Severity: medium"; break;
+        case GL_DEBUG_SEVERITY_LOW:          std::cout << "Severity: low"; break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION: std::cout << "Severity: notification"; break;
+    } std::cout << std::endl;
+    std::cout << std::endl;
+}
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
@@ -128,6 +213,7 @@ int main(int, char **)
          throw 1;
      }
      // Create the window that appears on the screen
+     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
      window = glfwCreateWindow(width, height, "Window", NULL, NULL);
 
      // Tells GLFW to add the window to the current context
@@ -140,6 +226,19 @@ int main(int, char **)
           glfwTerminate();
           return -1;
      }
+
+     int flags; glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
+     if (flags & GL_CONTEXT_FLAG_DEBUG_BIT)
+     {
+         glEnable(GL_DEBUG_OUTPUT);
+         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+         glDebugMessageCallback(glDebugOutput, nullptr);
+         glDebugMessageControl(GL_DEBUG_SOURCE_API,
+                               GL_DEBUG_TYPE_ERROR,
+                               GL_DEBUG_SEVERITY_HIGH,
+                               0, nullptr, GL_TRUE);
+     }
+
      // Parses the fragment and vertex shader files and wraps them into a shader program
      // The files are compiled to an intermediary language then translated into specific instructions for the GPU
      Shader depthShader("../assets/shaders/shadows/depth.vert", "../assets/shaders/shadows/depth.frag"); // omnidirectional shadowmaps
@@ -153,6 +252,7 @@ int main(int, char **)
      // Models
      Model cafe("../assets/ModularModel/modular.obj");
      Model cube("../assets/Models/cube.obj");
+     Model sphere("../assets/Models/subsphere.obj");
      // quad geometry
      VAO quadVAO;
      VBO quadVBO(quadVertices, sizeof(quadVertices));
@@ -168,45 +268,7 @@ int main(int, char **)
      skyboxVAO.Unbind();
 
      //-----------IMAGE VARIABLES-----------
-     //---G-BUFFER---
-     unsigned int gBuffer;
-     glGenFramebuffers(1, &gBuffer);
-     glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
-     unsigned int gPosition, gNormal, gColorSpec;
-     // - gPosition
-     glGenTextures(1, &gPosition);
-     glBindTexture(GL_TEXTURE_2D, gPosition);
-     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
-     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
-     // - gNormal
-     glGenTextures(1, &gNormal);
-     glBindTexture(GL_TEXTURE_2D, gNormal);
-     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
-     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
-     // - gColorSpec
-     glGenTextures(1, &gColorSpec);
-     glBindTexture(GL_TEXTURE_2D, gColorSpec);
-     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gColorSpec, 0);
 
-     unsigned int gAttatchments[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
-     glDrawBuffers(3, gAttatchments);
-
-     unsigned int gRenderbuffer;
-     glGenRenderbuffers(1, &gRenderbuffer);
-     glBindRenderbuffer(GL_RENDERBUFFER, gRenderbuffer);
-     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
-     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gRenderbuffer);
-     if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-         std::cout << "gFramebuffer is not complete!" << std::endl;
-     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-     //---END OF G-BUFFER---
      //---HDR & BLOOM---
      FBO hdrFBO;
      hdrFBO.AttatchTextures(width, height, 2, GL_RGBA16F);
@@ -270,7 +332,7 @@ int main(int, char **)
      //glEnable(GL_CULL_FACE);
 
      // cube map texture
-    std::vector<std::string> textureMaps = {
+    /*std::vector<std::string> textureMaps = {
         "../assets/textures/Yokohama3/negx.jpg",
         "../assets/textures/Yokohama3/posx.jpg",
         "../assets/textures/Yokohama3/posy.jpg",
@@ -278,7 +340,7 @@ int main(int, char **)
         "../assets/textures/Yokohama3/negz.jpg",
         "../assets/textures/Yokohama3/posz.jpg",
     };
-    unsigned int cubemapTexture = LoadCubeMap(textureMaps);
+    unsigned int cubemapTexture = LoadCubeMap(textureMaps);*/
 
      // -----------RENDER LOOP VARIABLES-----------
      Camera camera(width, height, glm::vec3(0.0f, 2.5f, 2.0f));
@@ -327,7 +389,7 @@ int main(int, char **)
           camera.Matrix(45, 0.1, 100);
 
           //--------------SHADERS & MODEL DRAWING--------------
-          //---FIRST PASS (SHADOW MAP)---
+          //---FIRST PASS (SHADOW MAPS)---
           glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
           glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
           glBindTexture(GL_TEXTURE_2D, depthMap);
@@ -344,6 +406,10 @@ int main(int, char **)
           depthShader.SetToMat4("lightSpaceMatrix", lightSpaceMatrix);
           depthShader.SetToMat4("model", model);
           cafe.Draw(depthShader);
+          model = glm::translate(model, GUI.modelPos);
+          model = glm::scale(model, glm::vec3(0.5));
+          depthShader.SetToMat4("model", model);
+          sphere.Draw(depthShader);
           // 2. Depth Cube Map
           glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
           glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
@@ -367,6 +433,7 @@ int main(int, char **)
           shadowTransforms.push_back(shadowProj *
                            glm::lookAt(GUI.lightPos, GUI.lightPos + glm::vec3( 0.0, 0.0,-1.0), glm::vec3(0.0,-1.0, 0.0)));
           pointDepthShader.Activate();
+          model = glm::mat4(1.0);
           pointDepthShader.SetToMat4("model", model);
           for(int i = 0; i < 6; ++i)
           {
@@ -375,13 +442,15 @@ int main(int, char **)
           pointDepthShader.SetToVec3("lightPos", &GUI.lightPos[0]);
           pointDepthShader.SetToFloat("far_plane", far);
           cafe.Draw(pointDepthShader);
+          model = glm::translate(model, GUI.modelPos);
+          model = glm::scale(model, glm::vec3(0.5));
+          pointDepthShader.SetToMat4("model", model);
+          sphere.Draw(pointDepthShader);
           glBindFramebuffer(GL_FRAMEBUFFER, 0);
           //---END OF FIRST PASS---
-          //---SECOND PASS (DEFERRED RENDERING)
           glm::mat4 view = camera.GetViewMatrix();
           glm::mat4 projection = camera.GetProjMatrix();
-          //---END OF SECOND PASS---
-          //---THIRD PASS (SHADOW RENDERING)---
+          //---SECOND PASS (SHADOW RENDERING)---
           glViewport(0, 0, width, height);
           hdrFBO.Bind();
           //glDrawBuffers(2, attatchments);
@@ -395,7 +464,6 @@ int main(int, char **)
 
           shadowShader.SetToMat4("view", view);
           shadowShader.SetToMat4("projection", projection);
-          shadowShader.SetToMat4("model", model);
           shadowShader.SetToFloat("far_plane", far);
           shadowShader.SetToMat4("lightSpaceMatrix", lightSpaceMatrix);
           shadowShader.SetToVec3("u_viewPos", &camera.Position[0]);
@@ -408,8 +476,19 @@ int main(int, char **)
           shadowShader.SetToFloat("pLight.constant", 1.0f);
           shadowShader.SetToFloat("pLight.linear", 0.32f);
           shadowShader.SetToFloat("pLight.quadratic", 0.09f);
+          // draw cafe
+          shadowShader.SetToInt("colorOrTex", 0);
+          model = glm::mat4(1.0);
+          shadowShader.SetToMat4("model", model);
           cafe.Draw(shadowShader);
+          //draw sphere
+          shadowShader.SetToInt("colorOrTex", 1);
+          model = glm::translate(model, GUI.modelPos);
+          model = glm::scale(model, glm::vec3(0.5));
+          shadowShader.SetToMat4("model", model);
+          sphere.Draw(shadowShader);
 
+          model = glm::mat4(1.0);
           model = glm::translate(model, GUI.lightPos);
           model = glm::scale(model, glm::vec3(0.2f));
           lightCubeShader.Activate();
@@ -438,6 +517,7 @@ int main(int, char **)
           glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
           // Sky Box
+          /*
           glDepthFunc(GL_LEQUAL);
           skyboxShader.Activate();
           glm::mat4 skyboxView = glm::mat4(glm::mat3(camera.GetViewMatrix()));
@@ -448,7 +528,7 @@ int main(int, char **)
           glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
           glDrawArrays(GL_TRIANGLES, 0, 36);
           glDepthFunc(GL_LESS);
-          skyboxVAO.Unbind();
+          skyboxVAO.Unbind();*/
 
           //---END---
           //--END OF THIRD PASS---
@@ -479,6 +559,11 @@ int main(int, char **)
           ImGui::Text("Edit Point Light");
           ImGui::SliderFloat3("Position", &GUI.lightPos[0], -20.0, 20.0);
           ImGui::SliderFloat3("Color", &GUI.lightColor[0], 0.0, 10.0);
+
+          ImGui::Separator();
+
+          ImGui::Text("Edit Sphere");
+          ImGui::SliderFloat3("Model Pos", &GUI.modelPos[0], -20.0, 20.0);
 
           ImGui::Separator();
 
