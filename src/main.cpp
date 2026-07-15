@@ -470,7 +470,7 @@ int main(int, char **)
           shadowShader.SetToVec3("dLight.direction", &GUI.lightDir[0]);
           shadowShader.SetToVec3("dLight.ambient", &glm::vec3(0.4)[0]);
           shadowShader.SetToVec3("dLight.diffuse", &glm::vec3(0.4)[0]);
-          shadowShader.SetToVec3("dLight.specular", &glm::vec3(0.2)[0]);
+          shadowShader.SetToVec3("dLight.specular", &glm::vec3(0.1)[0]);
           shadowShader.SetToVec3("pLight.position", &GUI.lightPos[0]);
           shadowShader.SetToVec3("pLight.color", &GUI.lightColor[0]);
           shadowShader.SetToFloat("pLight.constant", 1.0f);

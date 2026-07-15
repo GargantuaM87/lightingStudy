@@ -83,6 +83,11 @@ vec3 CalcDirLight(DirectionalLight light, vec3 normal, vec3 viewDir) {
 
     // diffuse
     float diff = max(dot(lightDir, normal), 0.0);
+
+    if(diff >= 0.8) {diff = 1.0;}
+    else if(diff >= 0.6) {diff = 0.6;}
+    else if(diff >= 0.3) {diff = 0.3;}
+    else {diff = 0.0;}
     // specular
     float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
     // combine
@@ -104,6 +109,11 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
 
     // diffuse
     float diff = max(dot(normal, lightDir), 0.0);
+
+    if(diff >= 0.8) {diff = 1.0;}
+    else if(diff >= 0.6) {diff = 0.6;}
+    else if(diff >= 0.3) {diff = 0.3;}
+    else {diff = 0.0;}
     // specular
     float spec = pow(max(dot(viewDir, halfwayDir), 0.0), 32.0);
 
